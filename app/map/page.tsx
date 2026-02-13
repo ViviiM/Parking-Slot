@@ -153,9 +153,9 @@ export default function MapPage() {
                 <User className="w-5 h-5" />
             </div>
             <div>
-                <h1 className="text-2xl font-bold">Find Parking</h1>
+                <h1 className="text-2xl font-bold">Ashish Parking</h1>
                 <p className="text-muted-foreground text-sm cursor-pointer hover:underline" onClick={() => setIsProfileOpen(true)}>
-                    Welcome, {user?.name}
+                    Welcome, {user.name || 'Ashish'}
                 </p>
             </div>
         </div>

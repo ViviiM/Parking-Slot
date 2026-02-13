@@ -79,11 +79,11 @@ function AuthContent() {
         // Mock user login
         login({
           id: "user-1",
-          name: "John Doe",
+          name: "Ashish",
           email: data.email,
           role: "user",
           isDisabled: false,
-          vehicle: { type: "Petrol", plateNumber: "ABC-123", model: "Civic" }
+          vehicle: { type: "Petrol", plateNumber: "ABC-123", model: "Mercedes" }
         });
         router.push("/map");
       }

@@ -200,7 +200,7 @@ export default function BookingsPage() {
                                     : "Your parking history is empty. Start your journey!"}
                             </p>
                             <Button className="rounded-full px-8 shadow-lg shadow-primary/20" onClick={() => router.push('/map')}>
-                                Find Parking
+                                Ashish Parking
                             </Button>
                         </div>
                     )}
