@@ -24,7 +24,7 @@ export interface Location {
 export interface ParkingSlot {
   id: string; // e.g., 'G-01', 'B1-05'
   layer: string; // 'Ground', 'B1', etc.
-  typ: 'standard' | 'ev' | 'disabled';
+  typ: 'standard' | 'ev' | 'disabled' | 'disabledEvBoth';
   isOccupied: boolean;
   bookedBy?: string; // userId
 }

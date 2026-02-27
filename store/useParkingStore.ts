@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Zone, Booking } from '@/types';
 import { encryptData, decryptData } from '@/lib/encryption';
-import { MOCK_ZONES } from '@/lib/dummyData';
+import { MOCK_ZONES, getInitialZones } from '@/lib/dummyData';
 
 interface ParkingState {
   zones: Zone[];
@@ -15,7 +15,7 @@ interface ParkingState {
   selectZone: (zoneId: string) => void;
   bookSlot: (booking: Booking) => void;
   cancelBooking: (bookingId: string) => void;
-  completeBooking: (bookingId: string) => void;
+  completeBooking: (bookingId: string, finalDurationHr?: number, finalCost?: number) => void;
   updateAvailability: (zoneId: string) => void; 
 }
 
@@ -44,7 +44,7 @@ const encryptedStorage = {
 export const useParkingStore = create<ParkingState>()(
   persist(
     (set, get) => ({
-      zones: MOCK_ZONES,
+      zones: getInitialZones(),
       activeBooking: null,
       bookings: [],
       selectedZone: null,
@@ -56,44 +56,125 @@ export const useParkingStore = create<ParkingState>()(
         set({ selectedZone: zone || null });
       },
 
-      bookSlot: (booking) => set((state) => ({
-        bookings: [...state.bookings, booking],
-        activeBooking: booking,
-        // Update slot status in zone
-        zones: state.zones.map(z => {
+      bookSlot: (booking) => set((state) => {
+          if (typeof window !== 'undefined') {
+              try {
+                  const keys = JSON.parse(localStorage.getItem('booked_slots_keys') || '[]');
+                  keys.push({ zoneId: booking.zoneId, slotId: booking.slotId });
+                  localStorage.setItem('booked_slots_keys', JSON.stringify(keys));
+              } catch(e) {}
+          }
+          const newZones = state.zones.map(z => {
+              if (z.id !== booking.zoneId) return z;
+              return {
+                  ...z,
+                  parkingStructure: z.parkingStructure.map(layer => {
+                      return {
+                          ...layer,
+                          slots: layer.slots.map(slot => {
+                              if (slot.id !== booking.slotId) return slot;
+                              return { ...slot, isOccupied: true, bookedBy: booking.userId };
+                          })
+                      }
+                  }),
+                  availableSlots: z.availableSlots - 1
+              }
+          });
+          
+          return {
+            bookings: [...state.bookings, booking],
+            activeBooking: booking,
+            zones: newZones,
+            selectedZone: state.selectedZone?.id === booking.zoneId 
+                ? newZones.find(z => z.id === booking.zoneId) 
+                : state.selectedZone
+          };
+      }),
+
+      cancelBooking: (bookingId) => set((state) => {
+        const booking = state.bookings.find(b => b.id === bookingId);
+        if (!booking) return state;
+
+        if (typeof window !== 'undefined') {
+            try {
+                let keys = JSON.parse(localStorage.getItem('booked_slots_keys') || '[]');
+                keys = keys.filter((k: any) => !(k.zoneId === booking.zoneId && k.slotId === booking.slotId));
+                localStorage.setItem('booked_slots_keys', JSON.stringify(keys));
+            } catch(e) {}
+        }
+
+        const newZones = state.zones.map(z => {
             if (z.id !== booking.zoneId) return z;
             return {
                 ...z,
                 parkingStructure: z.parkingStructure.map(layer => {
-                    if (layer.name !== booking.layer) return layer;
                     return {
                         ...layer,
                         slots: layer.slots.map(slot => {
                             if (slot.id !== booking.slotId) return slot;
-                            return { ...slot, isOccupied: true, bookedBy: booking.userId };
+                            return { ...slot, isOccupied: false, bookedBy: undefined };
                         })
                     }
                 }),
-                availableSlots: z.availableSlots - 1
+                availableSlots: z.availableSlots + 1
             }
-        })
-      })),
+        });
 
-      cancelBooking: (bookingId) => set((state) => ({
-        bookings: state.bookings.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b),
-        activeBooking: state.activeBooking?.id === bookingId ? null : state.activeBooking,
-        // Release slot logic... (omitted for brevity but should be here)
-      })),
+        return {
+            bookings: state.bookings.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b),
+            activeBooking: state.activeBooking?.id === bookingId ? null : state.activeBooking,
+            zones: newZones,
+            selectedZone: state.selectedZone?.id === booking.zoneId ? newZones.find(z => z.id === booking.zoneId) : state.selectedZone
+        };
+      }),
       
-      completeBooking: (bookingId) => set((state) => ({
-          bookings: state.bookings.map(b => b.id === bookingId ? { ...b, status: 'completed' } : b),
-          activeBooking: state.activeBooking?.id === bookingId ? null : state.activeBooking,
-      })),
+      completeBooking: (bookingId, finalDurationHr, finalCost) => set((state) => {
+          const booking = state.bookings.find(b => b.id === bookingId);
+          if (!booking) return state;
+
+          if (typeof window !== 'undefined') {
+              try {
+                  let keys = JSON.parse(localStorage.getItem('booked_slots_keys') || '[]');
+                  keys = keys.filter((k: any) => !(k.zoneId === booking.zoneId && k.slotId === booking.slotId));
+                  localStorage.setItem('booked_slots_keys', JSON.stringify(keys));
+              } catch(e) {}
+          }
+
+          const newZones = state.zones.map(z => {
+              if (z.id !== booking.zoneId) return z;
+              return {
+                  ...z,
+                  parkingStructure: z.parkingStructure.map(layer => {
+                      return {
+                          ...layer,
+                          slots: layer.slots.map(slot => {
+                              if (slot.id !== booking.slotId) return slot;
+                              return { ...slot, isOccupied: false, bookedBy: undefined };
+                          })
+                      }
+                  }),
+                  availableSlots: z.availableSlots + 1
+              }
+          });
+
+          return {
+              bookings: state.bookings.map(b => b.id === bookingId ? { 
+                  ...b, 
+                  status: 'completed',
+                  estimatedDuration: finalDurationHr || b.estimatedDuration,
+                  totalCost: finalCost !== undefined ? finalCost : b.totalCost,
+                  endTime: new Date().toISOString()
+              } : b),
+              activeBooking: state.activeBooking?.id === bookingId ? null : state.activeBooking,
+              zones: newZones,
+              selectedZone: state.selectedZone?.id === booking.zoneId ? newZones.find(z => z.id === booking.zoneId) : state.selectedZone
+          };
+      }),
 
       updateAvailability: (zoneId) => {
           // Simulate some random changes
-          set((state) => ({
-              zones: state.zones.map(z => {
+          set((state) => {
+              const newZones = state.zones.map(z => {
                   if (z.id !== zoneId) return z;
                   // Randomly free up or occupy a slot
                   const randomLayerIdx = Math.floor(Math.random() * z.parkingStructure.length);
@@ -120,25 +201,23 @@ export const useParkingStore = create<ParkingState>()(
                       parkingStructure: newStructure,
                       availableSlots: newIsOccupied ? z.availableSlots - 1 : z.availableSlots + 1
                   };
-              })
-          }))
+              });
+
+              return {
+                  zones: newZones,
+                  selectedZone: state.selectedZone?.id === zoneId ? newZones.find(z => z.id === zoneId) : state.selectedZone
+              };
+          })
       }
     }),
     {
       name: 'parking-data-storage',
       storage: createJSONStorage(() => encryptedStorage),
-      // We only persist bookings. Zones are reset on reload to pick up new mock data.
-      // In a real app, zones would be fetched from an API.
+      // We only persist bookings. Zones are reset on reload to pick up new mock data and manually disabled by getInitialZones.
       partialize: (state) => ({ 
           bookings: state.bookings, 
-          activeBooking: state.activeBooking 
-      }),
-      // Rehydrate zones from MOCK_ZONES
-      onRehydrateStorage: () => (state) => {
-          if (state) {
-              state.setZones(MOCK_ZONES);
-          }
-      }
+          activeBooking: state.activeBooking
+      })
     }
   )
 );

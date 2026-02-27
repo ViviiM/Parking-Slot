@@ -14,15 +14,17 @@ import {
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import BookingPassModal from "@/components/booking/BookingPassModal";
+import PaymentModal from "@/components/payment/PaymentModal";
 import { Booking } from "@/types";
 
 export default function BookingsPage() {
     const router = useRouter();
     const { user, _hasHydrated } = useAuthStore();
-    const { bookings, cancelBooking } = useParkingStore();
+    const { bookings, cancelBooking, completeBooking } = useParkingStore();
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+    const [pendingCompletion, setPendingCompletion] = useState<{id: string, dur: number, cost: number} | null>(null);
 
     useEffect(() => {
         if (_hasHydrated) {
@@ -127,7 +129,7 @@ export default function BookingsPage() {
                                         <h3 className="font-bold text-lg leading-tight">{booking.zoneName}</h3>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-xl font-bold text-primary">${booking.totalCost}</div>
+                                        <div className="text-xl font-bold text-primary">₹{booking.totalCost}</div>
                                         <div className="text-xs text-muted-foreground">{booking.estimatedDuration} hrs</div>
                                     </div>
                                 </CardHeader>
@@ -200,7 +202,7 @@ export default function BookingsPage() {
                                     : "Your parking history is empty. Start your journey!"}
                             </p>
                             <Button className="rounded-full px-8 shadow-lg shadow-primary/20" onClick={() => router.push('/map')}>
-                                Ashish Parking
+                                Parking
                             </Button>
                         </div>
                     )}
@@ -210,7 +212,23 @@ export default function BookingsPage() {
             <BookingPassModal 
                 booking={selectedBooking} 
                 isOpen={!!selectedBooking} 
-                onClose={() => setSelectedBooking(null)} 
+                onClose={() => setSelectedBooking(null)}
+                onExit={(id, dur, cost) => {
+                    setPendingCompletion({id, dur, cost});
+                    setSelectedBooking(null);
+                }}
+            />
+
+            <PaymentModal 
+                isOpen={!!pendingCompletion} 
+                amount={pendingCompletion?.cost || 0} 
+                onClose={() => setPendingCompletion(null)} 
+                onSuccess={() => {
+                    if (pendingCompletion) {
+                        completeBooking(pendingCompletion.id, pendingCompletion.dur, pendingCompletion.cost);
+                        setPendingCompletion(null);
+                    }
+                }} 
             />
         </div>
     );

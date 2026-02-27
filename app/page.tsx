@@ -19,7 +19,7 @@ export default function Home() {
         className="z-10 text-center space-y-6"
       >
         <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">
-        Ashish Smart Parking
+        Smart Parking
         </h1>
         <p className="text-xl text-muted-foreground max-w-[600px]">
           Seamless real-time parking slot booking. Find, book, and park within seconds.

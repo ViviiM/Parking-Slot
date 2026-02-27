@@ -28,7 +28,6 @@ export default function MapPage() {
     const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
     const [bookingProcessing, setProcessing] = useState(false);
-    const [duration, setDuration] = useState(2); // hours
     const selectedZone = useMemo(() => zones.find(z => z.id === selectedZoneId), [zones, selectedZoneId]);
     const [searchQuery, setSearchQuery] = useState("");
     const [focusedLocation, setFocusedLocation] = useState<[number, number] | null>(null);
@@ -90,10 +89,12 @@ export default function MapPage() {
         const allSlots = selectedZone.parkingStructure.flatMap(layer => layer.slots);
         const available = allSlots.filter(s => !s.isOccupied);
         
-        if (user.isDisabled) {
-            bestSlot = available.find(s => s.typ === 'disabled') || available[0];
+        if (user.isDisabled && user.vehicle?.type === 'EV') {
+            bestSlot = available.find(s => s.typ === 'disabledEvBoth') || available.find(s => s.typ === 'disabled') || available.find(s => s.typ === 'ev') || available[0];
+        } else if (user.isDisabled) {
+            bestSlot = available.find(s => s.typ === 'disabled' || s.typ === 'disabledEvBoth') || available[0];
         } else if (user.vehicle?.type === 'EV') {
-            bestSlot = available.find(s => s.typ === 'ev') || available[0];
+            bestSlot = available.find(s => s.typ === 'ev' || s.typ === 'disabledEvBoth') || available[0];
         } else {
             bestSlot = available.find(s => s.typ === 'standard') || available[0];
         }
@@ -108,7 +109,8 @@ export default function MapPage() {
     const handleBooking = () => {
         if (!selectedZone || !selectedSlot || !user) return;
         setProcessing(true);
-        const cost = selectedZone.hourlyRate * duration;
+        // Initially, we will just use 1 hour as an estimate, actual cost will be calculated on Exit
+        const cost = selectedZone.hourlyRate * 1;
 
         setTimeout(() => {
             const newBooking: Booking = {
@@ -121,13 +123,14 @@ export default function MapPage() {
                 layer: selectedSlot.layer,
                 vehicleNo: user.vehicle?.plateNumber || 'Unknown',
                 startTime: new Date().toISOString(),
-                estimatedDuration: duration,
+                estimatedDuration: 1,
                 totalCost: cost,
                 status: 'active'
             };
             
             bookSlot(newBooking);
             setProcessing(false);
+            setSelectedSlot(null);
             router.push('/booking/success');
         }, 1500);
     };
@@ -153,9 +156,9 @@ export default function MapPage() {
                 <User className="w-5 h-5" />
             </div>
             <div>
-                <h1 className="text-2xl font-bold">Ashish Parking</h1>
+                <h1 className="text-2xl font-bold">Smart Parking</h1>
                 <p className="text-muted-foreground text-sm cursor-pointer hover:underline" onClick={() => setIsProfileOpen(true)}>
-                    Welcome, {user.name || 'Ashish'}
+                    Welcome, {user.name || ''}
                 </p>
             </div>
         </div>
@@ -197,7 +200,7 @@ export default function MapPage() {
                     <CardTitle>{selectedZone ? selectedZone.name : "Select a Zone"}</CardTitle>
                     <CardDescription>
                         {selectedZone 
-                          ? <span>{selectedZone.availableSlots} slots • ${selectedZone.hourlyRate}/hr • <span className="text-blue-500">{1.2} km away</span></span>
+                          ? <span>{selectedZone.availableSlots} slots • ₹{selectedZone.hourlyRate}/hr • <span className="text-blue-500">{1.2} km away</span></span>
                           : "Tap a green circle on the map to view details"}
                     </CardDescription>
                 </CardHeader>
@@ -241,11 +244,13 @@ export default function MapPage() {
                                                                     ? "bg-primary text-primary-foreground border-primary scale-110 shadow-md z-10" 
                                                                     : "bg-background hover:bg-accent hover:border-primary/50",
                                                             slot.typ === 'disabled' && !slot.isOccupied && "border-blue-300 bg-blue-50 text-blue-700",
-                                                            slot.typ === 'ev' && !slot.isOccupied && "border-green-300 bg-green-50 text-green-700"
+                                                            slot.typ === 'ev' && !slot.isOccupied && "border-green-300 bg-green-50 text-green-700",
+                                                            slot.typ === 'disabledEvBoth' && !slot.isOccupied && "border-indigo-300 bg-indigo-50 text-indigo-700"
                                                         )}
                                                     >
                                                         {slot.typ === 'disabled' ? <Accessibility className="w-3 h-3"/> : 
                                                          slot.typ === 'ev' ? <Zap className="w-3 h-3"/> : 
+                                                         slot.typ === 'disabledEvBoth' ? <div className="flex space-x-0.5"><Accessibility className="w-3 h-3"/><Zap className="w-3 h-3"/></div> : 
                                                          slot.id.split('-')[1]}
                                                     </button>
                                                 ))}
@@ -256,24 +261,16 @@ export default function MapPage() {
                             </Tabs>
 
                             <div className="space-y-4 pt-4 border-t">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">Duration</span>
-                                    <div className="flex items-center gap-2 bg-muted rounded-md p-1">
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm" onClick={() => setDuration(Math.max(1, duration - 1))}>-</Button>
-                                        <span className="w-8 text-center text-sm font-mono">{duration}h</span>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm" onClick={() => setDuration(duration + 1)}>+</Button>
-                                    </div>
-                                </div>
                                 <div className="flex justify-between items-center font-bold text-lg">
-                                    <span>Total</span>
-                                    <span>${selectedZone.hourlyRate * duration}</span>
+                                    <span>Rate</span>
+                                    <span>₹{selectedZone.hourlyRate}/hr</span>
                                 </div>
                             </div>
 
                             <div className="flex gap-3 pt-2">
-                                <Button variant="outline" className="flex-1" onClick={autoAllocate}>
+                                {/* <Button variant="outline" className="flex-1" onClick={autoAllocate}>
                                     Auto-Find
-                                </Button>
+                                </Button> */}
                                 <Button className="flex-1" disabled={!selectedSlot || bookingProcessing} onClick={handleBooking}>
                                     {bookingProcessing ? <Loader2 className="animate-spin w-4 h-4"/> : "Confirm Booking"}
                                 </Button>

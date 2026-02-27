@@ -2,14 +2,40 @@ import { Zone, ParkingLayer, ParkingSlot } from '@/types';
 
 // Helper to generate slots
 const generateSlots = (layerName: string, count: number): ParkingSlot[] => {
-  return Array.from({ length: count }).map((_, i) => ({
-    id: `${layerName}-${i + 1}`,
-    layer: layerName,
-    typ: i % 10 === 0 ? 'disabled' : i % 5 === 0 ? 'ev' : 'standard', // 10% disabled, 20% EV (roughly)
-    isOccupied: Math.random() > 0.7, // 30% occupied initially
-  }));
-};
+  const disabledCount = Math.floor(count * 0.3);      // 15%
+  const evCount = Math.floor(count * 0.3);            // 25%
+  const bothCount = Math.floor(count * 0.3);           // 10% (Disabled + EV)
 
+  const standardCount = count - disabledCount - evCount - bothCount;
+
+  const slots: ParkingSlot[] = [];
+
+  for (let i = 0; i < count; i++) {
+    let typ: 'standard' | 'ev' | 'disabled' | 'disabledEvBoth';
+
+    if (i < standardCount) {
+      typ = 'standard';
+    } 
+    else if (i < standardCount + evCount) {
+      typ = 'ev';
+    } 
+    else if (i < standardCount + evCount + disabledCount) {
+      typ = 'disabled';
+    } 
+    else {
+      typ = 'disabledEvBoth';
+    }
+
+    slots.push({
+      id: `${layerName}-${i + 1}`,
+      layer: layerName,
+      typ : typ,
+      isOccupied: false,
+    });
+  }
+
+  return slots;
+};
 export const MOCK_ZONES: Zone[] = [
   // Ahmedabad City Zones (1-30)
   {
@@ -1544,4 +1570,51 @@ export const MOCK_ZONES: Zone[] = [
       { name: 'Ground', slots: generateSlots('G', 75) },
     ]
   }
+  ,{
+    id: 'zone-101',
+    name: 'Indus University',
+    location: {
+      lat: 23.0641111,
+      lng: 72.4397274,
+      address: 'Indus University, Rancharda, Ahmedabad, Gujarat'
+    },
+    landSize: 100,
+    hourlyRate: 20,
+    totalSlots: 5,
+    availableSlots: 5,
+    evPoints: 1,
+    disabledSpots: 0,
+    parkingStructure: [
+      { name: 'Ground', slots: generateSlots('G', 5) }
+    ],
+  },
 ];
+
+// Helper to get zones with locally persisted slot occupation status
+export const getInitialZones = (): Zone[] => {
+    let bookedSlots: { zoneId: string, slotId: string }[] = [];
+    if (typeof window !== 'undefined') {
+        try {
+            bookedSlots = JSON.parse(localStorage.getItem('booked_slots_keys') || '[]');
+        } catch(e) {}
+    }
+
+    if (bookedSlots.length === 0) return MOCK_ZONES;
+
+    return MOCK_ZONES.map(z => {
+        const zoneBookings = bookedSlots.filter(b => b.zoneId === z.id).map(b => b.slotId);
+        if (zoneBookings.length === 0) return z;
+
+        return {
+            ...z,
+            availableSlots: z.availableSlots - zoneBookings.length,
+            parkingStructure: z.parkingStructure.map(layer => ({
+                ...layer,
+                slots: layer.slots.map(slot => ({
+                    ...slot,
+                    isOccupied: zoneBookings.includes(slot.id) ? true : slot.isOccupied
+                }))
+            }))
+        };
+    });
+};

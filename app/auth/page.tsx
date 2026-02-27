@@ -79,7 +79,7 @@ function AuthContent() {
         // Mock user login
         login({
           id: "user-1",
-          name: "Ashish",
+          name: "",
           email: data.email,
           role: "user",
           isDisabled: false,
@@ -216,8 +216,7 @@ function AuthContent() {
                     {...vehicleForm.register("type")} 
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <option value="Petrol">Petrol</option>
-                    <option value="Diesel">Diesel</option>
+                    <option value="Petrol">Petrol / Diesel</option>
                     <option value="EV">Electric Vehicle (EV)</option>
                   </select>
                 </div>

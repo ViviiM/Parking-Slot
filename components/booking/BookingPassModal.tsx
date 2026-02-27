@@ -1,17 +1,68 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Booking } from "@/types";
 import { Button } from "@/components/ui/button";
-import { MapPin, CheckCircle2, Printer, X } from "lucide-react";
+import { MapPin, CheckCircle2, Printer, X, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface BookingPassModalProps {
     booking: Booking | null;
     isOpen: boolean;
     onClose: () => void;
+    onExit?: (bookingId: string, durationHr: number, cost: number) => void;
 }
 
-export default function BookingPassModal({ booking, isOpen, onClose }: BookingPassModalProps) {
+export default function BookingPassModal({ booking, isOpen, onClose, onExit }: BookingPassModalProps) {
+    const [timeLeft, setTimeLeft] = useState<number>(0);
+    const [currentDurationHr, setCurrentDurationHr] = useState<number>(1);
+    
+    // We get actual elapsed time to calculate live costs dynamically
+    useEffect(() => {
+        if (!booking || booking.status !== 'active') return;
+        
+        const updateCost = () => {
+            const now = new Date().getTime();
+            const start = new Date(booking.startTime).getTime();
+            const diffHr = (now - start) / (1000 * 60 * 60);
+            
+            // At least 1 hour is charged
+            setCurrentDurationHr(Math.max(1, Math.ceil(diffHr)));
+        };
+        
+        updateCost();
+        const costInterval = setInterval(updateCost, 60000);
+        return () => clearInterval(costInterval);
+    }, [booking]);
+
+    useEffect(() => {
+        if (!booking || booking.status !== 'active') return;
+
+        const arrivalTime = new Date(booking.startTime).getTime() + 15 * 60 * 1000;
+        
+        const updateTimer = () => {
+            const now = new Date().getTime();
+            const difference = arrivalTime - now;
+            
+            if (difference > 0) {
+                setTimeLeft(difference);
+            } else {
+                setTimeLeft(0);
+            }
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
+
+        return () => clearInterval(interval);
+    }, [booking]);
+
+    const formatTime = (ms: number) => {
+        const mins = Math.floor(ms / 60000);
+        const secs = Math.floor((ms % 60000) / 1000);
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
     if (!booking || !isOpen) return null;
 
     const handlePrint = () => {
@@ -89,30 +140,46 @@ export default function BookingPassModal({ booking, isOpen, onClose }: BookingPa
                                     <span className="font-bold font-mono">{booking.vehicleNo}</span>
                                 </div>
                                 <div className="flex justify-between items-center py-2 border-b border-gray-100 print:border-gray-200">
-                                    <span className="text-sm text-gray-500">Total Time</span>
-                                    <span className="font-bold">{booking.estimatedDuration} Hours</span>
+                                    <span className="text-sm text-gray-500">Duration</span>
+                                    <span className="font-bold">{booking.status === 'active' ? currentDurationHr : booking.estimatedDuration} Hours</span>
                                 </div>
                                 <div className="flex justify-between items-center py-2 border-b border-gray-100 print:border-gray-200">
                                     <span className="text-sm text-gray-500">Entry Time</span>
                                     <span className="font-bold">{new Date(booking.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                 </div>
-                                 <div className="flex justify-between items-center py-2 border-gray-100">
+                                 <div className={`flex justify-between items-center py-2 ${booking.status === 'active' && timeLeft > 0 ? "border-b border-gray-100 print:border-gray-200" : "border-gray-100"}`}>
                                     <span className="text-sm text-gray-500">Status</span>
                                     <span className="font-bold text-green-600 uppercase text-xs tracking-wider flex items-center gap-1">
                                         <CheckCircle2 className="w-3 h-3"/> Paid
                                     </span>
                                 </div>
+                                {booking.status === 'active' && timeLeft > 0 && (
+                                    <div className="flex justify-between items-center py-3 mt-2 bg-blue-50 rounded-lg px-3 border border-blue-100 print:hidden">
+                                        <div className="flex items-center gap-2">
+                                            <Timer className={`w-5 h-5 text-blue-600 ${timeLeft < 60000 ? "animate-pulse" : ""}`} />
+                                            <span className="text-sm font-semibold text-blue-900">Est. Arrival Left:</span>
+                                        </div>
+                                        <span className={`font-mono text-2xl font-bold min-w-[80px] text-right ${timeLeft < 60000 ? "text-red-600 animate-pulse" : "text-blue-700"}`}>
+                                            {formatTime(timeLeft)}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                             
                             <div className="flex items-center justify-between pt-2">
-                                <span className="font-semibold text-gray-900">Total Paid</span>
-                                <span className="text-2xl font-bold text-primary">${booking.totalCost}</span>
+                                <span className="font-semibold text-gray-900">{booking.status === 'active' ? 'Current Total' : 'Total Paid'}</span>
+                                <span className="text-2xl font-bold text-primary">₹{booking.status === 'active' ? Math.round(currentDurationHr * (booking.totalCost / booking.estimatedDuration)) : booking.totalCost}</span>
                             </div>
                         </div>
                     </div>
 
                     {/* Footer Actions (Sticky) */}
                     <div className="p-4 bg-white border-t flex flex-row gap-3 print:hidden shrink-0 z-10 w-full">
+                        {booking.status === 'active' && onExit && (
+                             <Button variant="destructive" className="flex-1 shrink-0" onClick={() => onExit(booking.id, currentDurationHr, Math.round(currentDurationHr * (booking.totalCost / booking.estimatedDuration)))}>
+                                 End & Pay
+                             </Button>
+                        )}
                         <Button variant="outline" className="flex-1 border-primary/20 hover:bg-primary/5 text-primary" onClick={handlePrint} title="Print / Save PDF">
                             <Printer className="w-4 h-4 mr-2"/> Print Pass
                         </Button>
