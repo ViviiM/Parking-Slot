@@ -268,9 +268,9 @@ export default function MapPage() {
                             </div>
 
                             <div className="flex gap-3 pt-2">
-                                {/* <Button variant="outline" className="flex-1" onClick={autoAllocate}>
+                                <Button variant="outline" className="flex-1" onClick={autoAllocate}>
                                     Auto-Find
-                                </Button> */}
+                                </Button>
                                 <Button className="flex-1" disabled={!selectedSlot || bookingProcessing} onClick={handleBooking}>
                                     {bookingProcessing ? <Loader2 className="animate-spin w-4 h-4"/> : "Confirm Booking"}
                                 </Button>
