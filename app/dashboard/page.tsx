@@ -3,7 +3,7 @@
 import { useAuthStore } from "@/store/useAuthStore";
 import { useParkingStore } from "@/store/useParkingStore";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -55,26 +55,33 @@ function SimpleTable({ bookings, onRemove }: { bookings: any[], onRemove: (id: s
   );
 }
 
-// Mock historic data for charts
-const revenueData = [
-  { time: '08:00', revenue: 1200 },
-  { time: '10:00', revenue: 3100 },
-  { time: '12:00', revenue: 6500 },
-  { time: '14:00', revenue: 4800 },
-  { time: '16:00', revenue: 8400 },
-  { time: '18:00', revenue: 9800 },
-  { time: '20:00', revenue: 11200 },
-];
-
-const densityData = [
-  { time: '08:00', occupancy: 12 },
-  { time: '10:00', occupancy: 45 },
-  { time: '12:00', occupancy: 88 },
-  { time: '14:00', occupancy: 65 },
-  { time: '16:00', occupancy: 92 },
-  { time: '18:00', occupancy: 70 },
-  { time: '20:00', occupancy: 35 },
-];
+// Generate mock historic data dynamically up to "now" time
+const generateHistoricData = (currentOccupancy: number) => {
+  const rev = [];
+  const dens = [];
+  const now = new Date();
+  
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 2 * 60 * 60 * 1000);
+    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Conclude at current live values for the final entry
+    if (i === 0) {
+        rev.push({ time: timeStr, revenue: 18860 });
+        dens.push({ time: timeStr, occupancy: currentOccupancy });
+    } else {
+        rev.push({ 
+            time: timeStr, 
+            revenue: Math.floor(Math.random() * 2000) + 1000 + (6-i)*2800 
+        });
+        dens.push({ 
+            time: timeStr, 
+            occupancy: Math.max(10, Math.min(100, Math.floor(Math.random() * 30) + 20 + (6-i)*5)) 
+        });
+    }
+  }
+  return { rev, dens };
+};
 
 export default function Dashboard() {
     const router = useRouter();
@@ -100,6 +107,12 @@ export default function Dashboard() {
     const occupied = totalSlots - zones.reduce((acc, z) => acc + z.availableSlots, 0);
     const occupancyRate = totalSlots > 0 ? Math.round((occupied / totalSlots) * 100) : 0;
 
+    // Generate chart data on mount based on exact current time and specific metrics
+    const { rev: revenueData, dens: densityData } = useMemo(() => {
+        if (!mounted) return { rev: [], dens: [] };
+        return generateHistoricData(occupancyRate);
+    }, [mounted, occupancyRate]);
+
     // Dynamic zone data for bar chart
     const zoneData = zones.map(z => ({
         name: z.name.length > 15 ? z.name.substring(0, 15) + '...' : z.name,
@@ -121,8 +134,8 @@ export default function Dashboard() {
                         <TrendingUp className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-gray-900">₹45,231</div>
-                        <p className="text-xs text-emerald-600 font-medium mt-1">+20.1% vs yesterday</p>
+                        <div className="text-3xl font-bold text-gray-900">₹18,860</div>
+                        <p className="text-xs text-emerald-600 font-medium mt-1">+2% vs yesterday</p>
                     </CardContent>
                 </Card>
                 <Card className="hover:shadow-md transition-shadow border-none shadow-sm bg-white">
@@ -147,12 +160,12 @@ export default function Dashboard() {
                 </Card>
                 <Card className="hover:shadow-md transition-shadow border-none shadow-sm bg-white">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-semibold text-gray-600">System Health</CardTitle>
+                        <CardTitle className="text-sm font-semibold text-gray-600">Total Transactions</CardTitle>
                         <Zap className="h-4 w-4 text-purple-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-gray-900">99.9%</div>
-                        <p className="text-xs text-purple-600 font-medium mt-1">All APIs operational</p>
+                        <div className="text-3xl font-bold text-gray-900">{bookings.length}</div>
+                        <p className="text-xs text-purple-600 font-medium mt-1">{bookings.filter(b => b.status === 'completed').length} completed sessions</p>
                     </CardContent>
                 </Card>
             </div>
